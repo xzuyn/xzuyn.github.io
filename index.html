@@ -54,7 +54,7 @@
       font-size: 0.9rem;
     }
 
-    /* Fixed 3-Column Grid */
+    /* 3x3 Grid Layout */
     .grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -131,7 +131,7 @@
   <div class="container">
     <header>
       <div>
-        <h1>MCC Island — Queue Dashboard</h1>
+        <h1>MCC Island — Queue Tracker</h1>
         <div class="status-text" id="status">Loading data...</div>
       </div>
     </header>
@@ -142,23 +142,22 @@
   <script>
     const DATA_URL = "mcci_player_counts.jsonl";
 
-    // Fixed 3x3 Layout Configuration
-    const QUEUE_CONFIG = [
-      // Row 1
-      { key: "sky_battle_quads",          name: "Sky Battle",                 color: "#38bdf8" },
-      { key: "sky_battle_solos",          name: "Sky Battle Solo",            color: "#f472b6" },
-      { key: "battle_box_quads",          name: "Battle Box",                 color: "#fb923c" },
-
-      // Row 2
-      { key: "dynaball",                  name: "Dynaball",                   color: "#c084fc" },
-      { key: "tgttos",                    name: "To Get To The Other Side",   color: "#94a3b8" },
-      { key: "hole_in_the_wall",          name: "Hole in the Wall",           color: "#facc15" },
-
-      // Row 3
-      { key: "battle_box_arena",          name: "Battle Box Arena",           color: "#4ade80" },
-      { key: "parkour_warrior_survival",  name: "Parkour Warrior Survivor",   color: "#f87171" },
-      { key: "rocket_spleef",             name: "Rocket Spleef Rush",         color: "#a3e635" }
+    const COLOR_PALETTE = [
+      "#38bdf8", // Sky Blue
+      "#fb923c", // Orange
+      "#4ade80", // Green
+      "#f87171", // Red
+      "#c084fc", // Purple
+      "#fb7185", // Rose
+      "#facc15", // Yellow
+      "#94a3b8", // Slate
+      "#a3e635"  // Lime
     ];
+
+    function formatQueueName(name) {
+      if (name === "tgttos") return "TGTTOS";
+      return name.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    }
 
     async function initDashboard() {
       const statusEl = document.getElementById("status");
@@ -190,19 +189,26 @@
           }
         });
 
-        const lastUpdated = timestamps[timestamps.length - 1].toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        statusEl.textContent = `Tracking 9 queues • Last updated: ${lastUpdated}`;
-
-        // Render each card in the exact layout order
-        QUEUE_CONFIG.forEach((config, index) => {
-          const dataPoints = queueMap[config.key] || [];
+        // Compute metrics (Avg, Peak, Latest) for sorting
+        const queueList = Object.entries(queueMap).map(([name, dataPoints]) => {
           const counts = dataPoints.map(p => p.y);
-          
           const sum = counts.reduce((acc, v) => acc + v, 0);
-          const avg = counts.length > 0 ? (sum / counts.length).toFixed(1) : 0;
-          const peak = counts.length > 0 ? Math.max(...counts) : 0;
-          const latest = counts.length > 0 ? counts[counts.length - 1] : 0;
+          const avg = sum / counts.length;
+          const peak = Math.max(...counts);
+          const latest = counts[counts.length - 1];
 
+          return { name, dataPoints, avg, peak, latest };
+        });
+
+        // Sort descending by average player count
+        queueList.sort((a, b) => b.avg - a.avg);
+
+        const lastUpdated = timestamps[timestamps.length - 1].toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        statusEl.textContent = `Showing 9 queues sorted by popularity • Last updated: ${lastUpdated}`;
+
+        // Render each card and chart
+        queueList.forEach((queue, index) => {
+          const color = COLOR_PALETTE[index % COLOR_PALETTE.length];
           const canvasId = `chart-${index}`;
 
           // Create DOM card element
@@ -211,11 +217,11 @@
           card.innerHTML = `
             <div class="card-header">
               <div>
-                <div class="card-title">${config.name}</div>
+                <div class="card-title">${formatQueueName(queue.name)}</div>
                 <div class="stats-badges">
-                  <div class="badge current">Now: <span>${latest}</span></div>
-                  <div class="badge">Avg: <span>${avg}</span></div>
-                  <div class="badge">Peak: <span>${peak}</span></div>
+                  <div class="badge current">Now: <span>${queue.latest}</span></div>
+                  <div class="badge">Avg: <span>${queue.avg.toFixed(1)}</span></div>
+                  <div class="badge">Peak: <span>${queue.peak}</span></div>
                 </div>
               </div>
             </div>
@@ -231,9 +237,9 @@
             type: "line",
             data: {
               datasets: [{
-                data: dataPoints,
-                borderColor: config.color,
-                backgroundColor: config.color + "18", // 10% alpha fill
+                data: queue.dataPoints,
+                borderColor: color,
+                backgroundColor: color + "18", // subtle 10% alpha fill
                 fill: true,
                 borderWidth: 1.8,
                 pointRadius: 0,
