@@ -71,6 +71,28 @@
       border-color: #38bdf8;
     }
 
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Top full-width Total card */
+    .total-card {
+      margin-bottom: 20px;
+      border-color: #323946;
+    }
+
+    .total-chart-container {
+      position: relative;
+      height: 220px;
+      width: 100%;
+    }
+
     /* 3x3 Grid Layout */
     .grid {
       display: grid;
@@ -90,16 +112,6 @@
       }
     }
 
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
-    }
-
     .card-header {
       display: flex;
       justify-content: space-between;
@@ -110,6 +122,10 @@
     .card-title {
       font-size: 1.05rem;
       font-weight: 600;
+    }
+
+    .total-card .card-title {
+      font-size: 1.2rem;
     }
 
     .stats-badges {
@@ -154,6 +170,10 @@
       <button class="btn" id="tz-toggle">Time: Local</button>
     </header>
 
+    <!-- Full-Width Total Graph Container -->
+    <div id="total-container"></div>
+
+    <!-- 3x3 Subplots Grid -->
     <div class="grid" id="charts-grid"></div>
   </div>
 
@@ -207,6 +227,7 @@
     async function initDashboard() {
       const statusEl = document.getElementById("status");
       const gridEl = document.getElementById("charts-grid");
+      const totalEl = document.getElementById("total-container");
 
       try {
         const response = await fetch(DATA_URL);
@@ -222,19 +243,121 @@
 
         const queueMap = {};
         const timestamps = [];
+        const totalDataPoints = [];
 
         lines.forEach(line => {
           const entry = JSON.parse(line);
           const t = new Date(entry.timestamp);
           timestamps.push(t);
 
+          let entryTotal = 0;
           for (const [queue, count] of Object.entries(entry.counts || {})) {
             if (!queueMap[queue]) queueMap[queue] = [];
             queueMap[queue].push({ x: t, y: count });
+            entryTotal += count;
+          }
+          totalDataPoints.push({ x: t, y: entryTotal });
+        });
+
+        // Calculate Totals Metrics
+        const totalCounts = totalDataPoints.map(p => p.y);
+        const totalSum = totalCounts.reduce((acc, v) => acc + v, 0);
+        const totalAvg = totalSum / totalCounts.length;
+        const totalPeak = Math.max(...totalCounts);
+        const totalLatest = totalCounts[totalCounts.length - 1];
+
+        // Render Total Card (Full Width)
+        const totalCard = document.createElement("div");
+        totalCard.className = "card total-card";
+        totalCard.innerHTML = `
+          <div class="card-header">
+            <div>
+              <div class="card-title">Total Players (All Queues Combined)</div>
+              <div class="stats-badges">
+                <div class="badge current">Now: <span>${totalLatest}</span></div>
+                <div class="badge">Avg: <span>${totalAvg.toFixed(1)}</span></div>
+                <div class="badge">Peak: <span>${totalPeak}</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="total-chart-container">
+            <canvas id="chart-total"></canvas>
+          </div>
+        `;
+        totalEl.appendChild(totalCard);
+
+        // Common chart option generator
+        const createChartConfig = (dataPoints, color) => ({
+          type: "line",
+          data: {
+            datasets: [{
+              data: dataPoints,
+              borderColor: color,
+              backgroundColor: color + "18",
+              fill: true,
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              tension: 0.2
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: "#20242c",
+                titleColor: "#f0f3f6",
+                bodyColor: "#f0f3f6",
+                borderColor: "#2d333f",
+                borderWidth: 1,
+                displayColors: false,
+                callbacks: {
+                  title: context => {
+                    if (!context.length) return '';
+                    const d = new Date(context[0].parsed.x);
+                    return useUTC
+                      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC'
+                      : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+                  },
+                  label: context => `Players: ${context.parsed.y}`
+                }
+              }
+            },
+            scales: {
+              x: {
+                type: "time",
+                time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
+                grid: { color: "#232732" },
+                ticks: {
+                  color: "#6b7280",
+                  maxRotation: 0,
+                  font: { size: 10 },
+                  callback: function(val) {
+                    const d = new Date(val);
+                    return useUTC
+                      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+                      : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  }
+                }
+              },
+              y: {
+                beginAtZero: true,
+                grid: { color: "#232732" },
+                ticks: { color: "#6b7280", precision: 0, font: { size: 10 }, maxTicksLimit: 5 }
+              }
+            }
           }
         });
 
-        // Compute metrics (Avg, Peak, Latest) for sorting
+        // Initialize Total Chart
+        const totalCtx = document.getElementById("chart-total").getContext("2d");
+        const totalChart = new Chart(totalCtx, createChartConfig(totalDataPoints, "#60a5fa"));
+        chartInstances.push(totalChart);
+
+        // Compute metrics (Avg, Peak, Latest) for individual sorting
         const queueList = Object.entries(queueMap).map(([name, dataPoints]) => {
           const counts = dataPoints.map(p => p.y);
           const sum = counts.reduce((acc, v) => acc + v, 0);
@@ -251,12 +374,11 @@
         lastTimestamp = timestamps[timestamps.length - 1];
         updateStatusText();
 
-        // Render each card and chart
+        // Render each 3x3 grid card and chart
         queueList.forEach((queue, index) => {
           const color = COLOR_PALETTE[index % COLOR_PALETTE.length];
           const canvasId = `chart-${index}`;
 
-          // Create DOM card element
           const card = document.createElement("div");
           card.className = "card";
           card.innerHTML = `
@@ -276,84 +398,8 @@
           `;
           gridEl.appendChild(card);
 
-          // Instantiate Chart.js
           const ctx = document.getElementById(canvasId).getContext("2d");
-          const chart = new Chart(ctx, {
-            type: "line",
-            data: {
-              datasets: [{
-                data: queue.dataPoints,
-                borderColor: color,
-                backgroundColor: color + "18", // subtle 10% alpha fill
-                fill: true,
-                borderWidth: 1.8,
-                pointRadius: 0,
-                pointHoverRadius: 4,
-                tension: 0.2
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              interaction: {
-                mode: "index",
-                intersect: false
-              },
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  backgroundColor: "#20242c",
-                  titleColor: "#f0f3f6",
-                  bodyColor: "#f0f3f6",
-                  borderColor: "#2d333f",
-                  borderWidth: 1,
-                  displayColors: false,
-                  callbacks: {
-                    title: context => {
-                      if (!context.length) return '';
-                      const d = new Date(context[0].parsed.x);
-                      return useUTC
-                        ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC'
-                        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
-                    },
-                    label: context => `Players: ${context.parsed.y}`
-                  }
-                }
-              },
-              scales: {
-                x: {
-                  type: "time",
-                  time: {
-                    unit: "hour",
-                    displayFormats: { hour: "HH:mm" }
-                  },
-                  grid: { color: "#232732" },
-                  ticks: {
-                    color: "#6b7280",
-                    maxRotation: 0,
-                    font: { size: 10 },
-                    callback: function(val) {
-                      const d = new Date(val);
-                      return useUTC
-                        ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
-                        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    }
-                  }
-                },
-                y: {
-                  beginAtZero: true,
-                  grid: { color: "#232732" },
-                  ticks: {
-                    color: "#6b7280",
-                    precision: 0,
-                    font: { size: 10 },
-                    maxTicksLimit: 5
-                  }
-                }
-              }
-            }
-          });
-
+          const chart = new Chart(ctx, createChartConfig(queue.dataPoints, color));
           chartInstances.push(chart);
         });
 
