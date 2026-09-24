@@ -2,127 +2,303 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MCC Island Player Counts</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #121214;
-      color: #e1e1e6;
-      margin: 0;
-      padding: 24px;
+    :root {
+      --bg-color: #0f1117;
+      --card-bg: #1a1d24;
+      --border-color: #272b35;
+      --text-main: #f0f3f6;
+      --text-muted: #8b949e;
     }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: 24px 20px;
+    }
+
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
     }
-    h1 {
-      margin-bottom: 4px;
-    }
-    .subtitle {
-      color: #a8a8b3;
+
+    header {
       margin-bottom: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 16px;
     }
-    .chart-card {
-      background: #202024;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+
+    .status-text {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* 3x3 Grid Layout */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    @media (max-width: 1024px) {
+      .grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 650px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+
+    .stats-badges {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: #252a34;
+      color: var(--text-muted);
+    }
+
+    .badge span {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .badge.current {
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 170px;
+      width: 100%;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>MCC Island — Queue Tracker</h1>
-    <div class="subtitle" id="status">Loading data...</div>
-    
-    <div class="chart-card">
-      <canvas id="mccChart" height="100"></canvas>
-    </div>
+    <header>
+      <div>
+        <h1>MCC Island — Queue Tracker</h1>
+        <div class="status-text" id="status">Loading data...</div>
+      </div>
+    </header>
+
+    <div class="grid" id="charts-grid"></div>
   </div>
 
   <script>
     const DATA_URL = "mcci_player_counts.jsonl";
 
-    const COLORS = [
-      "#3b82f6", "#ef4444", "#10b981", "#f59e0b", 
-      "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1"
+    const COLOR_PALETTE = [
+      "#38bdf8", // Sky Blue
+      "#fb923c", // Orange
+      "#4ade80", // Green
+      "#f87171", // Red
+      "#c084fc", // Purple
+      "#fb7185", // Rose
+      "#facc15", // Yellow
+      "#94a3b8", // Slate
+      "#a3e635"  // Lime
     ];
 
-    function formatName(name) {
+    function formatQueueName(name) {
       if (name === "tgttos") return "TGTTOS";
       return name.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     }
 
-    async function loadAndRender() {
+    async function initDashboard() {
+      const statusEl = document.getElementById("status");
+      const gridEl = document.getElementById("charts-grid");
+
       try {
         const response = await fetch(DATA_URL);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
         const text = await response.text();
         const lines = text.trim().split("\n").filter(Boolean);
 
-        const series = {};
+        if (lines.length === 0) {
+          statusEl.textContent = "No data points found.";
+          return;
+        }
+
+        const queueMap = {};
         const timestamps = [];
 
         lines.forEach(line => {
-          const record = JSON.parse(line);
-          const t = new Date(record.timestamp);
+          const entry = JSON.parse(line);
+          const t = new Date(entry.timestamp);
           timestamps.push(t);
 
-          for (const [queue, count] of Object.entries(record.counts)) {
-            if (!series[queue]) series[queue] = [];
-            series[queue].push({ x: t, y: count });
+          for (const [queue, count] of Object.entries(entry.counts || {})) {
+            if (!queueMap[queue]) queueMap[queue] = [];
+            queueMap[queue].push({ x: t, y: count });
           }
         });
 
-        const datasets = Object.keys(series).map((queue, i) => ({
-          label: formatName(queue),
-          data: series[queue],
-          borderColor: COLORS[i % COLORS.length],
-          backgroundColor: COLORS[i % COLORS.length] + "20",
-          borderWidth: 1.8,
-          pointRadius: 0,
-          tension: 0.2
-        }));
+        // Compute metrics (Avg, Peak, Latest) for sorting
+        const queueList = Object.entries(queueMap).map(([name, dataPoints]) => {
+          const counts = dataPoints.map(p => p.y);
+          const sum = counts.reduce((acc, v) => acc + v, 0);
+          const avg = sum / counts.length;
+          const peak = Math.max(...counts);
+          const latest = counts[counts.length - 1];
 
-        document.getElementById("status").textContent = 
-          `Tracking ${Object.keys(series).length} queues • Last updated: ${timestamps[timestamps.length - 1].toLocaleTimeString()}`;
+          return { name, dataPoints, avg, peak, latest };
+        });
 
-        const ctx = document.getElementById("mccChart").getContext("2d");
-        new Chart(ctx, {
-          type: "line",
-          data: { datasets },
-          options: {
-            responsive: true,
-            interaction: { mode: "index", intersect: false },
-            scales: {
-              x: {
-                type: "time",
-                time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
-                grid: { color: "#2d2d34" },
-                ticks: { color: "#a8a8b3" }
-              },
-              y: {
-                beginAtZero: true,
-                grid: { color: "#2d2d34" },
-                ticks: { color: "#a8a8b3", precision: 0 }
-              }
+        // Sort descending by average player count
+        queueList.sort((a, b) => b.avg - a.avg);
+
+        const lastUpdated = timestamps[timestamps.length - 1].toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        statusEl.textContent = `Showing 9 queues sorted by popularity • Last updated: ${lastUpdated}`;
+
+        // Render each card and chart
+        queueList.forEach((queue, index) => {
+          const color = COLOR_PALETTE[index % COLOR_PALETTE.length];
+          const canvasId = `chart-${index}`;
+
+          // Create DOM card element
+          const card = document.createElement("div");
+          card.className = "card";
+          card.innerHTML = `
+            <div class="card-header">
+              <div>
+                <div class="card-title">${formatQueueName(queue.name)}</div>
+                <div class="stats-badges">
+                  <div class="badge current">Now: <span>${queue.latest}</span></div>
+                  <div class="badge">Avg: <span>${queue.avg.toFixed(1)}</span></div>
+                  <div class="badge">Peak: <span>${queue.peak}</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="${canvasId}"></canvas>
+            </div>
+          `;
+          gridEl.appendChild(card);
+
+          // Instantiate Chart.js
+          const ctx = document.getElementById(canvasId).getContext("2d");
+          new Chart(ctx, {
+            type: "line",
+            data: {
+              datasets: [{
+                data: queue.dataPoints,
+                borderColor: color,
+                backgroundColor: color + "18", // subtle 10% alpha fill
+                fill: true,
+                borderWidth: 1.8,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                tension: 0.2
+              }]
             },
-            plugins: {
-              legend: {
-                position: "right",
-                labels: { color: "#e1e1e6", boxWidth: 12, padding: 12 }
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: {
+                mode: "index",
+                intersect: false
+              },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  backgroundColor: "#20242c",
+                  titleColor: "#f0f3f6",
+                  bodyColor: "#f0f3f6",
+                  borderColor: "#2d333f",
+                  borderWidth: 1,
+                  displayColors: false,
+                  callbacks: {
+                    label: context => `Players: ${context.parsed.y}`
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  type: "time",
+                  time: {
+                    unit: "hour",
+                    displayFormats: { hour: "HH:mm" }
+                  },
+                  grid: { color: "#232732" },
+                  ticks: { color: "#6b7280", maxRotation: 0, font: { size: 10 } }
+                },
+                y: {
+                  beginAtZero: true,
+                  grid: { color: "#232732" },
+                  ticks: {
+                    color: "#6b7280",
+                    precision: 0,
+                    font: { size: 10 },
+                    maxTicksLimit: 5
+                  }
+                }
               }
             }
-          }
+          });
         });
 
       } catch (err) {
-        document.getElementById("status").textContent = "Error loading data: " + err;
+        statusEl.textContent = `Error loading data: ${err.message}`;
       }
     }
 
-    loadAndRender();
+    initDashboard();
   </script>
 </body>
 </html>
