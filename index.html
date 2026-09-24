@@ -54,6 +54,23 @@
       font-size: 0.9rem;
     }
 
+    .btn {
+      background: #20242c;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .btn:hover {
+      background: #2a303c;
+      border-color: #38bdf8;
+    }
+
     /* 3x3 Grid Layout */
     .grid {
       display: grid;
@@ -134,6 +151,7 @@
         <h1>MCC Island — Queue Tracker</h1>
         <div class="status-text" id="status">Loading data...</div>
       </div>
+      <button class="btn" id="tz-toggle">Time: Local</button>
     </header>
 
     <div class="grid" id="charts-grid"></div>
@@ -141,6 +159,9 @@
 
   <script>
     const DATA_URL = "mcci_player_counts.jsonl";
+    let useUTC = false;
+    let chartInstances = [];
+    let lastTimestamp = null;
 
     const COLOR_PALETTE = [
       "#38bdf8", // Sky Blue
@@ -158,6 +179,22 @@
       if (name === "tgttos") return "TGTTOS";
       return name.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     }
+
+    function updateStatusText() {
+      if (!lastTimestamp) return;
+      const statusEl = document.getElementById("status");
+      const timeStr = useUTC
+        ? lastTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + " UTC"
+        : lastTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      statusEl.textContent = `Showing 9 queues sorted by average • Last updated: ${timeStr}`;
+    }
+
+    document.getElementById("tz-toggle").addEventListener("click", () => {
+      useUTC = !useUTC;
+      document.getElementById("tz-toggle").textContent = useUTC ? "Time: UTC" : "Time: Local";
+      updateStatusText();
+      chartInstances.forEach(chart => chart.update());
+    });
 
     async function initDashboard() {
       const statusEl = document.getElementById("status");
@@ -203,8 +240,8 @@
         // Sort descending by average player count
         queueList.sort((a, b) => b.avg - a.avg);
 
-        const lastUpdated = timestamps[timestamps.length - 1].toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        statusEl.textContent = `Showing 9 queues sorted by average • Last updated: ${lastUpdated}`;
+        lastTimestamp = timestamps[timestamps.length - 1];
+        updateStatusText();
 
         // Render each card and chart
         queueList.forEach((queue, index) => {
@@ -233,7 +270,7 @@
 
           // Instantiate Chart.js
           const ctx = document.getElementById(canvasId).getContext("2d");
-          new Chart(ctx, {
+          const chart = new Chart(ctx, {
             type: "line",
             data: {
               datasets: [{
@@ -264,6 +301,13 @@
                   borderWidth: 1,
                   displayColors: false,
                   callbacks: {
+                    title: context => {
+                      if (!context.length) return '';
+                      const d = new Date(context[0].parsed.x);
+                      return useUTC
+                        ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC'
+                        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    },
                     label: context => `Players: ${context.parsed.y}`
                   }
                 }
@@ -276,7 +320,17 @@
                     displayFormats: { hour: "HH:mm" }
                   },
                   grid: { color: "#232732" },
-                  ticks: { color: "#6b7280", maxRotation: 0, font: { size: 10 } }
+                  ticks: {
+                    color: "#6b7280",
+                    maxRotation: 0,
+                    font: { size: 10 },
+                    callback: function(val) {
+                      const d = new Date(val);
+                      return useUTC
+                        ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+                        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+                  }
                 },
                 y: {
                   beginAtZero: true,
@@ -291,6 +345,8 @@
               }
             }
           });
+
+          chartInstances.push(chart);
         });
 
       } catch (err) {
