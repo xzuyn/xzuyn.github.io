@@ -163,6 +163,11 @@
     let chartInstances = [];
     let lastTimestamp = null;
 
+    // Detect user's local timezone abbreviation (e.g. EDT, PST, BST, GMT+2)
+    const localTzName = new Intl.DateTimeFormat([], { timeZoneName: 'short' })
+      .formatToParts(new Date())
+      .find(p => p.type === 'timeZoneName')?.value || 'Local';
+
     const COLOR_PALETTE = [
       "#38bdf8", // Sky Blue
       "#fb923c", // Orange
@@ -185,13 +190,16 @@
       const statusEl = document.getElementById("status");
       const timeStr = useUTC
         ? lastTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + " UTC"
-        : lastTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        : lastTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
       statusEl.textContent = `Showing 9 queues sorted by average • Last updated: ${timeStr}`;
     }
 
-    document.getElementById("tz-toggle").addEventListener("click", () => {
+    const tzBtn = document.getElementById("tz-toggle");
+    tzBtn.textContent = `Time: ${localTzName}`;
+
+    tzBtn.addEventListener("click", () => {
       useUTC = !useUTC;
-      document.getElementById("tz-toggle").textContent = useUTC ? "Time: UTC" : "Time: Local";
+      tzBtn.textContent = useUTC ? "Time: UTC" : `Time: ${localTzName}`;
       updateStatusText();
       chartInstances.forEach(chart => chart.update());
     });
@@ -306,7 +314,7 @@
                       const d = new Date(context[0].parsed.x);
                       return useUTC
                         ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC'
-                        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
                     },
                     label: context => `Players: ${context.parsed.y}`
                   }
