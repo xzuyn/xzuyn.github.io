@@ -204,7 +204,7 @@
         queueList.sort((a, b) => b.avg - a.avg);
 
         const lastUpdated = timestamps[timestamps.length - 1].toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        statusEl.textContent = `Showing 9 queues sorted by popularity • Last updated: ${lastUpdated}`;
+        statusEl.textContent = `Showing 9 queues sorted by average • Last updated: ${lastUpdated}`;
 
         // Render each card and chart
         queueList.forEach((queue, index) => {
