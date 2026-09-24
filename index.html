@@ -8,9 +8,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
   <style>
     :root {
-      --bg-color: #0f1117;
-      --card-bg: #1a1d24;
-      --border-color: #272b35;
+      --bg-color: #12151e;
+      --card-bg: #1c212d;
+      --border-color: #2b3244;
       --text-main: #f0f3f6;
       --text-muted: #8b949e;
     }
@@ -22,91 +22,114 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg-color);
       color: var(--text-main);
-      padding: 24px 20px;
+      padding: 24px 16px;
     }
 
     .container {
-      max-width: 1400px;
+      max-width: 1440px;
       margin: 0 auto;
     }
 
     header {
       margin-bottom: 24px;
       display: flex;
-      flex-wrap: wrap;
       justify-content: space-between;
       align-items: flex-end;
-      gap: 12px;
       border-bottom: 1px solid var(--border-color);
-      padding-bottom: 16px;
+      padding-bottom: 14px;
     }
 
     h1 {
-      font-size: 1.6rem;
+      font-size: 1.5rem;
       font-weight: 700;
+      letter-spacing: -0.5px;
     }
 
     .status-text {
       color: var(--text-muted);
-      font-size: 0.9rem;
+      font-size: 0.85rem;
     }
 
-    /* 3x3 Grid Layout */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 18px;
+    /* Menu Layout Hierarchy */
+    .menu-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
 
-    @media (max-width: 1024px) {
-      .grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
+    .game-row {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
     }
 
-    @media (max-width: 650px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
+    /* Row 1 and 3 (3 games centered) */
+    .row-3 .card {
+      flex: 1 1 340px;
+      max-width: 420px;
+    }
+
+    /* Row 2 (4 games) */
+    .row-4 .card {
+      flex: 1 1 270px;
+      max-width: 330px;
     }
 
     .card {
       background: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 10px;
-      padding: 16px;
+      padding: 14px 16px;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .card:hover {
+      border-color: #424d66;
     }
 
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
+    }
+
+    .card-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
     }
 
     .card-title {
-      font-size: 1.05rem;
+      font-size: 0.95rem;
       font-weight: 600;
+      white-space: nowrap;
     }
 
     .stats-badges {
       display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin-top: 4px;
+      gap: 5px;
     }
 
     .badge {
-      font-size: 0.75rem;
-      padding: 2px 7px;
+      font-size: 0.72rem;
+      padding: 2px 6px;
       border-radius: 4px;
-      background: #252a34;
+      background: #252c3d;
       color: var(--text-muted);
     }
 
@@ -116,13 +139,13 @@
     }
 
     .badge.current {
-      background: rgba(59, 130, 246, 0.2);
-      color: #60a5fa;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
     }
 
     .chart-container {
       position: relative;
-      height: 170px;
+      height: 125px;
       width: 100%;
     }
   </style>
@@ -132,36 +155,42 @@
     <header>
       <div>
         <h1>MCC Island — Queue Tracker</h1>
-        <div class="status-text" id="status">Loading data...</div>
+        <div class="status-text" id="status">Loading queue data...</div>
       </div>
     </header>
 
-    <div class="grid" id="charts-grid"></div>
+    <div class="menu-layout" id="menu-layout"></div>
   </div>
 
   <script>
-    const DATA_URL = "https://gist.githubusercontent.com/xzuyn/e7a3bbdc524d6cff48c8d9dff56a8998/raw/5a6c8083d2fb0e201198d8fd2762ea9af2ae13cf/mcci_player_counts.jsonl";
+    const DATA_URL = "mcci_player_counts.jsonl";
 
-    const COLOR_PALETTE = [
-      "#38bdf8", // Sky Blue
-      "#fb923c", // Orange
-      "#4ade80", // Green
-      "#f87171", // Red
-      "#c084fc", // Purple
-      "#fb7185", // Rose
-      "#facc15", // Yellow
-      "#94a3b8", // Slate
-      "#a3e635"  // Lime
+    // Exact layout matching the in-game GUI
+    const MENU_ROWS = [
+      // Row 1 (3 items centered)
+      [
+        { id: "sky_battle_quads", name: "Sky Battle", color: "#f59e0b" },
+        { id: "sky_battle_solos", name: "Sky Battle Solo", color: "#a855f7" },
+        { id: "battle_box_quads", name: "Battle Box", color: "#84cc16" }
+      ],
+      // Row 2 (4 items)
+      [
+        { id: "dynaball", name: "Dynaball", color: "#38bdf8" },
+        { id: "tgttos", name: "To Get To The Other Side", color: "#f43f5e" },
+        { id: "hole_in_the_wall", name: "Hole in the Wall", color: "#22c55e" },
+        { id: "battle_box_arena", name: "Battle Box Arena", color: "#ef4444" }
+      ],
+      // Row 3 (3 items centered)
+      [
+        { id: "parkour_warrior_survival", name: "Parkour Warrior Survivor", color: "#4ade80" },
+        { id: "rocket_spleef", name: "Rocket Spleef Rush", color: "#ea580c" },
+        { id: "parkour_warrior_dojo", name: "Parkour Warrior Dojo", color: "#eab308" }
+      ]
     ];
-
-    function formatQueueName(name) {
-      if (name === "tgttos") return "TGTTOS";
-      return name.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-    }
 
     async function initDashboard() {
       const statusEl = document.getElementById("status");
-      const gridEl = document.getElementById("charts-grid");
+      const layoutEl = document.getElementById("menu-layout");
 
       try {
         const response = await fetch(DATA_URL);
@@ -189,108 +218,98 @@
           }
         });
 
-        // Compute metrics (Avg, Peak, Latest) for sorting
-        const queueList = Object.entries(queueMap).map(([name, dataPoints]) => {
-          const counts = dataPoints.map(p => p.y);
-          const sum = counts.reduce((acc, v) => acc + v, 0);
-          const avg = sum / counts.length;
-          const peak = Math.max(...counts);
-          const latest = counts[counts.length - 1];
-
-          return { name, dataPoints, avg, peak, latest };
-        });
-
-        // Sort descending by average player count
-        queueList.sort((a, b) => b.avg - a.avg);
-
         const lastUpdated = timestamps[timestamps.length - 1].toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        statusEl.textContent = `Showing 9 queues sorted by popularity • Last updated: ${lastUpdated}`;
+        statusEl.textContent = `Last updated: ${lastUpdated} • Synced to in-game menu`;
 
-        // Render each card and chart
-        queueList.forEach((queue, index) => {
-          const color = COLOR_PALETTE[index % COLOR_PALETTE.length];
-          const canvasId = `chart-${index}`;
+        // Build each row
+        MENU_ROWS.forEach((row, rowIndex) => {
+          const rowEl = document.createElement("div");
+          rowEl.className = `game-row ${row.length === 3 ? "row-3" : "row-4"}`;
 
-          // Create DOM card element
-          const card = document.createElement("div");
-          card.className = "card";
-          card.innerHTML = `
-            <div class="card-header">
-              <div>
-                <div class="card-title">${formatQueueName(queue.name)}</div>
+          row.forEach((game, gameIndex) => {
+            const dataPoints = queueMap[game.id] || [];
+            const counts = dataPoints.map(p => p.y);
+            const sum = counts.reduce((acc, v) => acc + v, 0);
+            const avg = counts.length ? (sum / counts.length).toFixed(1) : "0.0";
+            const peak = counts.length ? Math.max(...counts) : 0;
+            const latest = counts.length ? counts[counts.length - 1] : 0;
+
+            const canvasId = `chart-${rowIndex}-${gameIndex}`;
+
+            const card = document.createElement("div");
+            card.className = "card";
+            card.innerHTML = `
+              <div class="card-header">
+                <div class="card-title-group">
+                  <div class="color-dot" style="background-color: ${game.color};"></div>
+                  <div class="card-title">${game.name}</div>
+                </div>
                 <div class="stats-badges">
-                  <div class="badge current">Now: <span>${queue.latest}</span></div>
-                  <div class="badge">Avg: <span>${queue.avg.toFixed(1)}</span></div>
-                  <div class="badge">Peak: <span>${queue.peak}</span></div>
+                  <div class="badge current">Now: <span>${latest}</span></div>
+                  <div class="badge">Avg: <span>${avg}</span></div>
+                  <div class="badge">Peak: <span>${peak}</span></div>
                 </div>
               </div>
-            </div>
-            <div class="chart-container">
-              <canvas id="${canvasId}"></canvas>
-            </div>
-          `;
-          gridEl.appendChild(card);
+              <div class="chart-container">
+                <canvas id="${canvasId}"></canvas>
+              </div>
+            `;
+            rowEl.appendChild(card);
 
-          // Instantiate Chart.js
-          const ctx = document.getElementById(canvasId).getContext("2d");
-          new Chart(ctx, {
-            type: "line",
-            data: {
-              datasets: [{
-                data: queue.dataPoints,
-                borderColor: color,
-                backgroundColor: color + "18", // subtle 10% alpha fill
-                fill: true,
-                borderWidth: 1.8,
-                pointRadius: 0,
-                pointHoverRadius: 4,
-                tension: 0.2
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              interaction: {
-                mode: "index",
-                intersect: false
-              },
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  backgroundColor: "#20242c",
-                  titleColor: "#f0f3f6",
-                  bodyColor: "#f0f3f6",
-                  borderColor: "#2d333f",
-                  borderWidth: 1,
-                  displayColors: false,
-                  callbacks: {
-                    label: context => `Players: ${context.parsed.y}`
-                  }
-                }
-              },
-              scales: {
-                x: {
-                  type: "time",
-                  time: {
-                    unit: "hour",
-                    displayFormats: { hour: "HH:mm" }
-                  },
-                  grid: { color: "#232732" },
-                  ticks: { color: "#6b7280", maxRotation: 0, font: { size: 10 } }
+            // Chart rendering
+            setTimeout(() => {
+              const ctx = document.getElementById(canvasId).getContext("2d");
+              new Chart(ctx, {
+                type: "line",
+                data: {
+                  datasets: [{
+                    data: dataPoints,
+                    borderColor: game.color,
+                    backgroundColor: game.color + "18",
+                    fill: true,
+                    borderWidth: 1.7,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    tension: 0.2
+                  }]
                 },
-                y: {
-                  beginAtZero: true,
-                  grid: { color: "#232732" },
-                  ticks: {
-                    color: "#6b7280",
-                    precision: 0,
-                    font: { size: 10 },
-                    maxTicksLimit: 5
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  interaction: { mode: "index", intersect: false },
+                  plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                      backgroundColor: "#1c212d",
+                      titleColor: "#f0f3f6",
+                      bodyColor: "#f0f3f6",
+                      borderColor: "#2b3244",
+                      borderWidth: 1,
+                      displayColors: false,
+                      callbacks: {
+                        label: ctx => `Players: ${ctx.parsed.y}`
+                      }
+                    }
+                  },
+                  scales: {
+                    x: {
+                      type: "time",
+                      time: { unit: "hour", displayFormats: { hour: "HH:mm" } },
+                      grid: { color: "#232938" },
+                      ticks: { color: "#6b7280", maxRotation: 0, font: { size: 9 } }
+                    },
+                    y: {
+                      beginAtZero: true,
+                      grid: { color: "#232938" },
+                      ticks: { color: "#6b7280", precision: 0, font: { size: 9 }, maxTicksLimit: 4 }
+                    }
                   }
                 }
-              }
-            }
+              });
+            }, 0);
           });
+
+          layoutEl.appendChild(rowEl);
         });
 
       } catch (err) {
