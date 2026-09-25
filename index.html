@@ -188,17 +188,17 @@
       .formatToParts(new Date())
       .find(p => p.type === 'timeZoneName')?.value || 'Local';
 
-    const COLOR_PALETTE = [
-      "#38bdf8", // Sky Blue
-      "#fb923c", // Orange
-      "#4ade80", // Green
-      "#f87171", // Red
-      "#c084fc", // Purple
-      "#fb7185", // Rose
-      "#facc15", // Yellow
-      "#94a3b8", // Slate
-      "#a3e635"  // Lime
-    ];
+    const QUEUE_COLORS = {
+      "battle_box_quads": "#3b82f6",          // Royal Blue
+      "battle_box_arena": "#f97316",          // Fiery Orange-Red
+      "dynaball": "#eab308",                  // Electric Yellow
+      "hole_in_the_wall": "#22c55e",          // Slime Green
+      "parkour_warrior_survival": "#fb7185",  // Cherry Blossom Rose
+      "sky_battle_quads": "#06b6d4",          // Sky Cyan
+      "sky_battle_solos": "#a855f7",          // Vivid Purple
+      "rocket_spleef": "#d946ef",             // Neon Magenta
+      "tgttos": "#e2e8f0",                    // Chicken Silver
+    };
 
     function formatQueueName(name) {
       if (name === "tgttos") return "TGTTOS";
@@ -377,7 +377,7 @@
 
         // Render each 3x3 grid card and chart
         queueList.forEach((queue, index) => {
-          const color = COLOR_PALETTE[index % COLOR_PALETTE.length];
+          const color = QUEUE_COLORS[queue.name];
           const canvasId = `chart-${index}`;
 
           const card = document.createElement("div");
